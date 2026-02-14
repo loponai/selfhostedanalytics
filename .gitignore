@@ -1,0 +1,5 @@
+.env
+credentials.txt
+*.sql
+*.log
+.DS_Store
