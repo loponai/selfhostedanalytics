@@ -420,7 +420,7 @@ This removes all containers, configs, and data. Docker itself is left installed.
 |------|---------|---------|
 | 80 | HTTP (redirect to HTTPS) | Yes |
 | 443 | HTTPS (reverse proxy) | Yes |
-| 3000 | Umami (internal) | No — proxied |
+| 3000 | Umami (localhost only) | No — bound to 127.0.0.1, proxied |
 | 5432 | PostgreSQL (internal) | No — Docker only |
 
 ### File Layout

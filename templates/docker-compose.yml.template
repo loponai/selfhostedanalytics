@@ -2,12 +2,12 @@ services:
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      DATABASE_URL: postgresql://__POSTGRES_USER__:__POSTGRES_PASSWORD__@db:5432/__POSTGRES_DB__
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       DATABASE_TYPE: postgresql
-      APP_SECRET: __APP_SECRET__
-      TRACKER_SCRIPT_NAME: __TRACKER_SCRIPT_NAME__
+      APP_SECRET: ${APP_SECRET}
+      TRACKER_SCRIPT_NAME: ${TRACKER_SCRIPT_NAME:-getinfo}
     depends_on:
       db:
         condition: service_healthy
@@ -21,14 +21,14 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: __POSTGRES_DB__
-      POSTGRES_USER: __POSTGRES_USER__
-      POSTGRES_PASSWORD: __POSTGRES_PASSWORD__
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - umami-db:/var/lib/postgresql/data
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U __POSTGRES_USER__ -d __POSTGRES_DB__"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5

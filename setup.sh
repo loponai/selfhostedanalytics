@@ -16,16 +16,37 @@ success() { echo -e "\033[1;32m✓\033[0m $1"; }
 warn()    { echo -e "\033[1;33m!\033[0m $1"; }
 error()   { echo -e "\033[1;31m✗\033[0m $1"; exit 1; }
 
+validate_domain() {
+    local domain="$1"
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]]; then
+        return 1
+    fi
+    if [[ "$domain" =~ \.\. ]]; then
+        return 1
+    fi
+    return 0
+}
+
+validate_email() {
+    local email="$1"
+    if [[ ! "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
 template() {
     local src="$1" dst="$2"
     cp "$src" "$dst"
     sed -i "s|__DOMAIN__|${DOMAIN}|g" "$dst"
-    sed -i "s|__POSTGRES_DB__|${POSTGRES_DB}|g" "$dst"
-    sed -i "s|__POSTGRES_USER__|${POSTGRES_USER}|g" "$dst"
-    sed -i "s|__POSTGRES_PASSWORD__|${POSTGRES_PASSWORD}|g" "$dst"
-    sed -i "s|__APP_SECRET__|${APP_SECRET}|g" "$dst"
-    sed -i "s|__TRACKER_SCRIPT_NAME__|${TRACKER_SCRIPT_NAME}|g" "$dst"
-    sed -i "s|__EMAIL__|${EMAIL}|g" "$dst"
+}
+
+nginx_config_path() {
+    if [ "$OS_FAMILY" = "rhel" ]; then
+        echo "/etc/nginx/conf.d/umami.conf"
+    else
+        echo "/etc/nginx/sites-available/umami"
+    fi
 }
 
 generate_secret() {
@@ -75,10 +96,16 @@ read -p "  Enter your analytics domain (e.g. analytics.yourdomain.com): " DOMAIN
 if [ -z "$DOMAIN" ]; then
     error "Domain is required"
 fi
+if ! validate_domain "$DOMAIN"; then
+    error "Invalid domain format. Use only letters, numbers, dots, and hyphens (e.g. analytics.yourdomain.com)"
+fi
 
 read -p "  Enter your email (for SSL certificates): " EMAIL
 if [ -z "$EMAIL" ]; then
     error "Email is required"
+fi
+if ! validate_email "$EMAIL"; then
+    error "Invalid email format"
 fi
 
 echo ""
@@ -92,6 +119,12 @@ PROXY_CHOICE=${PROXY_CHOICE:-1}
 echo ""
 read -p "  Custom tracker script name (default: getinfo): " TRACKER_SCRIPT_NAME
 TRACKER_SCRIPT_NAME=${TRACKER_SCRIPT_NAME:-getinfo}
+
+# Sanitize tracker name — alphanumeric and hyphens only
+TRACKER_SCRIPT_NAME=$(echo "$TRACKER_SCRIPT_NAME" | tr -cd 'a-zA-Z0-9-')
+if [ -z "$TRACKER_SCRIPT_NAME" ]; then
+    TRACKER_SCRIPT_NAME="getinfo"
+fi
 
 echo ""
 success "Configuration collected"
@@ -185,10 +218,10 @@ info "Step 5/7: Deploying Umami"
 
 mkdir -p "$DATA_DIR"
 
-# Generate docker-compose.yml from template
-template "$INSTALL_DIR/templates/docker-compose.yml.template" "$DATA_DIR/docker-compose.yml"
+# Copy docker-compose.yml (uses ${VARIABLE} syntax — reads from .env at runtime)
+cp "$INSTALL_DIR/templates/docker-compose.yml.template" "$DATA_DIR/docker-compose.yml"
 
-# Generate .env
+# Generate .env with credentials
 cat > "$DATA_DIR/.env" <<EOF
 POSTGRES_DB=${POSTGRES_DB}
 POSTGRES_USER=${POSTGRES_USER}
@@ -196,8 +229,9 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 APP_SECRET=${APP_SECRET}
 TRACKER_SCRIPT_NAME=${TRACKER_SCRIPT_NAME}
 EOF
+chmod 600 "$DATA_DIR/.env"
 
-# Save credentials
+# Save credentials backup
 cat > "$CREDS_FILE" <<EOF
 # Umami Analytics Credentials
 # Generated: $(date)
@@ -240,6 +274,8 @@ fi
 
 info "Step 6/7: Configuring SSL"
 
+NGINX_CONF=$(nginx_config_path)
+
 if [ "$PROXY_CHOICE" = "2" ]; then
     # Caddy — auto-SSL
     template "$INSTALL_DIR/templates/Caddyfile.template" /etc/caddy/Caddyfile
@@ -249,11 +285,8 @@ else
     # Nginx + certbot
     mkdir -p /var/www/certbot
 
-    # Deploy nginx config (HTTP-only first for cert provisioning)
-    template "$INSTALL_DIR/templates/nginx.conf.template" /etc/nginx/sites-available/umami
-
-    # Create a temporary HTTP-only config for cert provisioning
-    cat > /etc/nginx/sites-available/umami <<EOF
+    # Deploy HTTP-only config for initial cert provisioning
+    cat > "$NGINX_CONF" <<EOF
 server {
     listen 80;
     server_name ${DOMAIN};
@@ -272,11 +305,15 @@ server {
 }
 EOF
 
-    ln -sf /etc/nginx/sites-available/umami /etc/nginx/sites-enabled/
-    rm -f /etc/nginx/sites-enabled/default
+    # Symlink for Debian-family (RHEL uses conf.d directly)
+    if [ "$OS_FAMILY" != "rhel" ]; then
+        ln -sf /etc/nginx/sites-available/umami /etc/nginx/sites-enabled/
+        rm -f /etc/nginx/sites-enabled/default
+    fi
+
     nginx -t && systemctl reload nginx
 
-    # Get SSL cert
+    # Get SSL cert — certbot modifies the nginx config to add the 443 block
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL"
 
     systemctl reload nginx

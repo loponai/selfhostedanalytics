@@ -46,6 +46,9 @@ if [ -f /etc/nginx/sites-enabled/umami ]; then
     rm -f /etc/nginx/sites-enabled/umami
     rm -f /etc/nginx/sites-available/umami
     nginx -t && systemctl reload nginx 2>/dev/null || true
+elif [ -f /etc/nginx/conf.d/umami.conf ]; then
+    rm -f /etc/nginx/conf.d/umami.conf
+    nginx -t && systemctl reload nginx 2>/dev/null || true
 fi
 
 # Remove caddy config (restore default)
