@@ -1,6 +1,6 @@
 # Self-Hosted Analytics
 
-One-shot installation of [Umami](https://umami.is) analytics on any VPS. Privacy-friendly, cookieless, open source — track all your websites from a single dashboard you own.
+One-shot installation of [Umami](https://umami.is) analytics on any server (VPS, home PC, or any Linux machine). Privacy-friendly, cookieless, open source — track all your websites from a single dashboard you own.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/loponai/selfhostedanalytics/main/install.sh | sudo bash
@@ -10,11 +10,11 @@ curl -fsSL https://raw.githubusercontent.com/loponai/selfhostedanalytics/main/in
 
 ---
 
-## Quick Start (Scala Hosting)
+## Quick Start
 
-### Step 1: Get a VPS
+### Step 1: Get a Server
 
-Grab a **managed VPS** from [Scala Hosting](https://www.scalahosting.com/vps-hosting.html). The entry plan is more than enough for analytics — Umami is lightweight.
+You need a server (VPS, home PC, or any Linux machine) with root access. Umami is lightweight — 1GB RAM is the minimum, 2GB recommended. Any provider works (Hetzner, DigitalOcean, Linode, etc.), or use a spare machine at home.
 
 | What you need | Minimum | Recommended |
 |---------------|---------|-------------|
@@ -23,11 +23,9 @@ Grab a **managed VPS** from [Scala Hosting](https://www.scalahosting.com/vps-hos
 | Storage | 20 GB | 50 GB |
 | OS | Ubuntu 22.04 / Debian 12 | Ubuntu 24.04 |
 
-> Scala's managed VPS includes SPanel, automatic backups, and 24/7 support. You can disable SPanel's web server to free up ports 80/443 for your analytics stack.
-
 ### Step 2: Get a Domain & Point It
 
-You need a subdomain for your analytics dashboard. Use any domain you own.
+You need a subdomain for your analytics dashboard (optional if using Tailscale — see [Quick Start for Home Server](#quick-start-home-server-with-tailscale) below). Use any domain you own.
 
 Go to your DNS provider (Cloudflare, Namecheap, etc.) and add an **A record**:
 
@@ -43,17 +41,17 @@ This gives you `analytics.yourdomain.com` pointing to your VPS.
 
 **Mac/Linux:**
 ```bash
-ssh root@YOUR_VPS_IP
+ssh root@YOUR_SERVER_IP
 ```
 
 **Windows (PowerShell):**
 ```powershell
-ssh root@YOUR_VPS_IP
+ssh root@YOUR_SERVER_IP
 ```
 
-> **Scala Hosting users:** If SPanel is running on ports 80/443, disable its web server first:
+> **If something is already using ports 80/443** (like a control panel web server), disable it first:
 > ```bash
-> systemctl stop spanel-nginx && systemctl disable spanel-nginx
+> systemctl stop nginx && systemctl disable nginx
 > ```
 
 ### Step 4: Run the Installer
@@ -98,19 +96,57 @@ The whole process takes about 2-3 minutes.
 
 ---
 
-## Why Scala Hosting?
+## Quick Start (Home Server with Tailscale)
 
-| Feature | Scala Hosting | Typical VPS |
-|---------|--------------|-------------|
-| Managed support | 24/7 with SPanel | Usually unmanaged |
-| Automatic backups | Daily, included | Extra cost or DIY |
-| SPanel (cPanel alternative) | Free, included | cPanel costs $15+/mo |
-| Server monitoring | Built-in | Set up yourself |
-| SSL management | Auto-renewal included | Manual certbot |
-| Starting price | ~$30/mo | Varies |
-| OS choices | Ubuntu, Debian, CentOS, Alma | Varies |
+If you want to run analytics on a home machine instead of renting a VPS, [Tailscale](https://tailscale.com/) makes it simple — no domain needed, no port forwarding, automatic SSL.
 
-> Scala gives you a managed experience at a VPS price. You get the control of a VPS with the convenience of managed hosting. Their SPanel is a free cPanel alternative that handles most server admin tasks.
+### Step 1: Install Docker
+
+Follow the [official Docker install guide](https://docs.docker.com/engine/install/) for your distro, or use the convenience script:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+### Step 2: Run the Installer
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/loponai/selfhostedanalytics/main/install.sh | sudo bash
+```
+
+When asked for a domain, enter any placeholder — you'll use your Tailscale URL instead.
+
+### Step 3: Install Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up
+```
+
+Follow the link to authenticate your machine.
+
+### Step 4: Expose with Tailscale Funnel
+
+Your websites need to reach your analytics server publicly, so use Tailscale Funnel:
+
+```bash
+tailscale funnel 443
+```
+
+This gives you a public HTTPS URL like `https://your-machine.tail1234.ts.net`. Tailscale Funnel handles SSL automatically — no Let's Encrypt, no certificate renewal, no Nginx SSL config.
+
+### Step 5: Use Your Tailscale URL
+
+Use your Funnel URL as the analytics script source on your websites:
+
+```html
+<script defer src="https://your-machine.tail1234.ts.net/getinfo.js" data-website-id="YOUR_WEBSITE_ID"></script>
+```
+
+### What this means
+
+- **No VPS cost** — use hardware you already own
+- **No domain needed** — Tailscale Funnel provides a public HTTPS URL
+- **Automatic SSL** — Tailscale handles certificates for you
 
 ---
 
@@ -345,13 +381,13 @@ certbot certificates
 certbot --nginx -d analytics.yourdomain.com
 ```
 
-**Port 80/443 already in use (Scala SPanel):**
+**Port 80/443 already in use:**
 ```bash
 # Check what's using the ports
 ss -tlnp | grep -E ':80|:443'
 
-# Disable SPanel's nginx
-systemctl stop spanel-nginx && systemctl disable spanel-nginx
+# Disable the conflicting web server
+systemctl stop nginx && systemctl disable nginx
 ```
 
 **Database connection errors:**
@@ -392,15 +428,15 @@ This removes all containers, configs, and data. Docker itself is left installed.
 
 ### Requirements
 
-- A VPS with root access (1 GB RAM minimum)
-- A domain or subdomain pointing to your VPS
+- A server (VPS, home PC, or any Linux machine) with root access (1 GB RAM minimum)
+- A domain or subdomain pointing to your server (optional if using Tailscale Funnel)
 - Ports 80 and 443 open
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                    Your VPS                      │
+│                   Your Server                     │
 │                                                  │
 │  ┌──────────┐    ┌──────────┐    ┌───────────┐  │
 │  │  Nginx/  │───▶│  Umami   │───▶│ PostgreSQL│  │
