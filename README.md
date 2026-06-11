@@ -1,3 +1,13 @@
+> ## ⚡ Want the easy, full version? → **[SparkBox](https://tomsparkbox.com)**
+>
+> This is one of my original one-shot scripts. It still works — but these days everything I build goes into **[SparkBox](https://tomsparkbox.com)**: a free, self-hosted home server that sets up this whole stack (and a lot more — photos, files, password manager, ad-blocking) with **one command**, a real web dashboard, automatic updates with one-click rollback, and a built-in AI assistant that troubleshoots and fixes things for you. No hand-editing config files.
+>
+> ### 👉 Get it free at **[tomsparkbox.com](https://tomsparkbox.com)**
+>
+> _Built by [Tom Spark Reviews](https://youtube.com/@TomSparkReviews)._
+
+---
+
 # Self-Hosted Analytics
 
 One-shot installation of [Umami](https://umami.is) analytics on any server (VPS, home PC, or any Linux machine). Privacy-friendly, cookieless, open source — track all your websites from a single dashboard you own.
